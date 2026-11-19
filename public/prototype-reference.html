@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="fr" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miabe Auto — Garages, pièces détachées et géolocalisation</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet JS & CSS for OpenStreetMap Navigation -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brandOrange: '#FF6B00',
+                        brandOrangeDark: '#CC5200',
+                        brandOrangeLight: '#FF881A',
+                        brandBlack: '#0D0D0D',
+                        brandBlackPure: '#000000',
+                        brandDarkGray: '#1A1A1A',
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'Montserrat', 'sans-serif'],
+                        heading: ['Montserrat', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Checkerboard / Damier Patterns & Custom Alternation */
+        .checkerboard-dark {
+            background-color: #0D0D0D;
+            background-image: linear-gradient(45deg, #161616 25%, transparent 25%), linear-gradient(-45deg, #161616 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #161616 75%), linear-gradient(-45deg, transparent 75%, #161616 75%);
+            background-size: 40px 40px;
+            background-position: 0 0, 0 20px, 20px -20px, -20px 0px;
+        }
+
+        .checkerboard-orange {
+            background-color: #FF6B00;
+            background-image: linear-gradient(45deg, #E65C00 25%, transparent 25%), linear-gradient(-45deg, #E65C00 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #E65C00 75%), linear-gradient(-45deg, transparent 75%, #E65C00 75%);
+            background-size: 40px 40px;
+            background-position: 0 0, 0 20px, 20px -20px, -20px 0px;
+        }
+
+        /* Glassmorphism Cards for Dark Backgrounds */
+        .glass-dark {
+            background: rgba(26, 26, 26, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 107, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Glassmorphism Cards for Orange Backgrounds */
+        .glass-orange {
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .glass-card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card-hover:hover {
+            transform: translateY(-5px);
+            border-color: #FF6B00;
+            box-shadow: 0 15px 35px rgba(255, 107, 0, 0.25);
+        }
+
+        .glass-input-dark {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 107, 0, 0.4);
+            color: #ffffff;
+        }
+        .glass-input-dark:focus {
+            border-color: #FF6B00;
+            background: rgba(255, 255, 255, 0.15);
+            outline: none;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0D0D0D;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #FF6B00;
+            border-radius: 4px;
+        }
+
+        #map {
+            height: 420px;
+            width: 100%;
+            border-radius: 1.5rem;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="bg-brandBlack text-white font-sans min-h-screen flex flex-col justify-between selection:bg-brandOrange selection:text-black">
+
+    <header class="sticky top-0 z-50 backdrop-blur-md bg-black/90 border-b border-brandOrange/40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- Logo -->
+            <a href="#" class="flex items-center gap-3 group">
+                <div class="w-10 h-10 rounded-xl bg-brandOrange flex items-center justify-center text-black font-black text-xl shadow-lg shadow-brandOrange/30 group-hover:scale-105 transition">
+                    <i class="fa-solid fa-wrench"></i>
+                </div>
+                <span class="font-heading font-black text-2xl md:text-3xl tracking-wider text-white">
+                    Miabe <span class="text-brandOrange font-extrabold">Auto</span>
+                </span>
+            </a>
+
+            <!-- Navigation Links -->
+            <nav class="hidden xl:flex items-center gap-6 font-medium text-sm tracking-wide">
+                <a href="#garages-auto" class="hover:text-brandOrange transition py-1 border-b-2 border-transparent hover:border-brandOrange">Garages Auto (4 Roues)</a>
+                <a href="#garages-motos" class="hover:text-brandOrange transition py-1 border-b-2 border-transparent hover:border-brandOrange">Garages Motos (2 Roues)</a>
+                <a href="#boutiques-pieces" class="hover:text-brandOrange transition py-1 border-b-2 border-transparent hover:border-brandOrange">Pièces Détachées</a>
+                <a href="#geolocalisation" class="text-brandOrange hover:text-white transition py-1 border-b-2 border-brandOrange flex items-center gap-1.5 font-bold"><i class="fa-solid fa-location-dot"></i> Géolocalisation</a>
+                <a href="#ai-assistant" class="hover:text-brandOrange transition py-1 border-b-2 border-transparent hover:border-brandOrange"><i class="fa-solid fa-wand-magic-sparkles text-brandOrange"></i> IA Diagnostic</a>
+            </nav>
+
+            <!-- Action CTA -->
+            <div class="hidden lg:flex items-center gap-3">
+                <a href="#gestion-stock" class="px-5 py-2.5 rounded-full bg-brandOrange text-black font-extrabold hover:bg-white transition duration-300 shadow-lg shadow-brandOrange/20 flex items-center gap-2">
+                    <i class="fa-solid fa-store"></i> Espace Pro &amp; Stocks
+                </a>
+            </div>
+
+            <!-- Mobile Menu Toggle -->
+            <button id="mobileMenuBtn" class="xl:hidden text-2xl text-brandOrange hover:text-white focus:outline-none" aria-label="Toggle menu">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+
+        <!-- Mobile Menu Dropdown -->
+        <div id="mobileMenu" class="hidden xl:hidden bg-brandDarkGray border-t border-brandOrange/30 px-6 py-6 flex flex-col gap-4 font-medium text-center">
+            <a href="#garages-auto" class="mobile-link py-2 hover:text-brandOrange">Garages Auto (4 Roues)</a>
+            <a href="#garages-motos" class="mobile-link py-2 hover:text-brandOrange">Garages Motos (2 Roues)</a>
+            <a href="#boutiques-pieces" class="mobile-link py-2 hover:text-brandOrange">Pièces Détachées</a>
+            <a href="#geolocalisation" class="mobile-link py-2 text-brandOrange font-bold"><i class="fa-solid fa-location-dot"></i> Géolocalisation & Itinéraires</a>
+            <a href="#ai-assistant" class="mobile-link py-2 hover:text-brandOrange"><i class="fa-solid fa-wand-magic-sparkles"></i> IA Diagnostic</a>
+            <a href="#gestion-stock" class="mobile-link px-6 py-3 rounded-full bg-brandOrange text-black font-extrabold">Espace Pro &amp; Stocks</a>
+        </div>
+    </header>
+
+    <main>
+        <section class="checkerboard-dark relative py-16 lg:py-24 px-4 sm:px-6 lg:px-8 border-b border-brandOrange/30">
+            <div class="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-center">
+                
+                <!-- Left Text Content -->
+                <div class="lg:col-span-7 space-y-8 text-center lg:text-left">
+                    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brandOrange/20 border border-brandOrange/50 text-xs md:text-sm font-bold text-brandOrange uppercase tracking-wider">
+                        <i class="fa-solid fa-gears"></i> Plateforme Nationale Auto &amp; Moto
+                    </div>
+
+                    <h1 class="font-heading text-4xl sm:text-6xl lg:text-7xl font-black uppercase tracking-tight leading-none text-white">
+                        MIABE <span class="text-brandOrange">AUTO</span>
+                        <span class="block text-2xl sm:text-4xl font-extrabold text-brandOrangeLight mt-3 normal-case">
+                            Garages, Motos &amp; Pièces Détachées
+                        </span>
+                    </h1>
+
+                    <!-- Slogan Emphasis -->
+                    <div class="p-5 rounded-2xl glass-dark border-l-4 border-brandOrange">
+                        <p class="text-xl sm:text-2xl font-semibold italic text-brandOrange">
+                            « Miabe Auto, votre véhicule entre de bonnes mains. »
+                        </p>
+                    </div>
+
+                    <p class="text-base sm:text-lg text-gray-300 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+                        Localisez immédiatement les meilleurs garages auto et moto près de chez vous, contactez directement les responsables, recherchez des pièces détachées en stock et lancez votre itinéraire GPS en un clic.
+                    </p>
+
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-2">
+                        <a href="#geolocalisation" class="px-8 py-4 rounded-full bg-brandOrange text-black font-black text-lg hover:bg-white transition duration-300 shadow-2xl shadow-brandOrange/40 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-map-location-dot"></i> Trouver un Garage Proche
+                        </a>
+                        <a href="#gestion-stock" class="px-8 py-4 rounded-full bg-brandDarkGray border border-brandOrange/60 text-white font-bold text-lg hover:border-brandOrange transition duration-300 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-box-open text-brandOrange"></i> Publier mes Pièces
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Right Quick Search Card -->
+                <div class="lg:col-span-5">
+                    <div class="glass-dark rounded-3xl p-6 sm:p-8 space-y-6">
+                        <div class="flex items-center justify-between border-b border-brandOrange/30 pb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-2xl bg-brandOrange text-black font-bold flex items-center justify-center text-xl shadow-lg">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-lg text-white">Recherche Rapide</h3>
+                                    <p class="text-xs text-brandOrange">Garages &amp; Stocks par Quartier</p>
+                                </div>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-brandOrange/20 text-brandOrange border border-brandOrange/40">
+                                24/7
+                            </span>
+                        </div>
+
+                        <!-- Quick Search Controls -->
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-gray-300 mb-1">Que cherchez-vous ?</label>
+                                <select id="searchType" class="w-full px-4 py-3 rounded-xl glass-input-dark text-sm bg-brandBlack">
+                                    <option value="all">Tous (Garages Auto, Motos & Pièces)</option>
+                                    <option value="auto">Garage 4 Roues (Automobiles)</option>
+                                    <option value="moto">Garage 2 Roues (Motos & Scooters)</option>
+                                    <option value="pieces">Boutique de Pièces Détachées</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold uppercase text-gray-300 mb-1">Filtrer par Quartier / Ville</label>
+                                <input type="text" id="searchQuartier" placeholder="Ex: Tokoin, Hanoukopé, Bè, Adidogomé..." class="w-full px-4 py-3 rounded-xl glass-input-dark text-sm">
+                            </div>
+
+                            <button onclick="filterEstablishments()" class="w-full py-4 rounded-xl bg-brandOrange text-black font-black hover:bg-white transition duration-300 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-filter"></i> Appliquer le Filtre
+                            </button>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-brandBlack/60 border border-brandOrange/20 text-xs text-gray-300 flex items-center gap-3">
+                            <i class="fa-solid fa-circle-check text-brandOrange text-lg"></i>
+                            <span><strong>Prototype de démonstration.</strong> Les établissements affichés ne sont pas encore vérifiés.</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section id="garages-auto" class="checkerboard-orange py-20 px-4 sm:px-6 lg:px-8 border-b border-black/40">
+            <div class="max-w-7xl mx-auto space-y-12">
+                <div class="text-center space-y-4 max-w-3xl mx-auto bg-black/80 p-8 rounded-3xl border border-white/20 shadow-2xl">
+                    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brandOrange text-black text-xs font-black uppercase tracking-wider">
+                        <i class="fa-solid fa-car"></i> Service Véhicules LOURDS &amp; LÉGERS
+                    </div>
+                    <h2 class="font-heading text-3xl sm:text-5xl font-black text-white uppercase">
+                        Garages Automobiles (4 Roues)
+                    </h2>
+                    <p class="text-gray-300 text-sm sm:text-base">
+                        Trouvez un mécanicien, un électricien auto, un tôlier ou un spécialiste du diagnostic.
+                    </p>
+                </div>
+
+                <!-- 4-Wheels Cards Grid -->
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8" id="gridAuto">
+                    <!-- Dynamic rendering from JS -->
+                </div>
+            </div>
+        </section>
+
+        <section id="garages-motos" class="checkerboard-dark py-20 px-4 sm:px-6 lg:px-8 border-b border-brandOrange/30">
+            <div class="max-w-7xl mx-auto space-y-12">
+                <div class="text-center space-y-4 max-w-3xl mx-auto">
+                    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brandOrange/20 text-brandOrange border border-brandOrange/40 text-xs font-black uppercase tracking-wider">
+                        <i class="fa-solid fa-motorcycle"></i> Deux Roues &amp; Tricycles
+                    </div>
+                    <h2 class="font-heading text-3xl sm:text-5xl font-black text-white uppercase">
+                        Garages Motos &amp; Scooters (2 Roues)
+                    </h2>
+                    <p class="text-gray-400 text-sm sm:text-base">
+                        Entretien, réparation moteur, révision de transmission et électricité pour toutes marques de motos.
+                    </p>
+                </div>
+
+                <!-- 2-Wheels Cards Grid -->
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8" id="gridMoto">
+                    <!-- Dynamic rendering from JS -->
+                </div>
+            </div>
+        </section>
+
+        <section id="boutiques-pieces" class="checkerboard-orange py-20 px-4 sm:px-6 lg:px-8 border-b border-black/40">
+            <div class="max-w-7xl mx-auto space-y-12">
+                <div class="text-center space-y-4 max-w-3xl mx-auto bg-black/80 p-8 rounded-3xl border border-white/20 shadow-2xl">
+                    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brandOrange text-black text-xs font-black uppercase tracking-wider">
+                        <i class="fa-solid fa-boxes-packing"></i> Boutiques &amp; Magasins
+                    </div>
+                    <h2 class="font-heading text-3xl sm:text-5xl font-black text-white uppercase">
+                        Maisons de Vente de Pièces Détachées
+                    </h2>
+                    <p class="text-gray-300 text-sm sm:text-base">
+                        Consultez les pièces d'origine ou d'occasion en stock chez les revendeurs agréés de votre secteur.
+                    </p>
+                </div>
+
+                <!-- Spare Parts Stores Cards Grid -->
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8" id="gridPieces">
+                    <!-- Dynamic rendering from JS -->
+                </div>
+            </div>
+        </section>
+
+        <section id="geolocalisation" class="checkerboard-dark py-20 px-4 sm:px-6 lg:px-8 border-b border-brandOrange/30">
+            <div class="max-w-7xl mx-auto space-y-10">
+                <div class="text-center space-y-4 max-w-3xl mx-auto">
+                    <span class="text-brandOrange font-black text-xs uppercase tracking-widest px-4 py-1 rounded-full bg-brandOrange/10 border border-brandOrange/30">
+                        <i class="fa-solid fa-location-crosshairs mr-1"></i> Navigation GPS en direct
+                    </span>
+                    <h2 class="font-heading text-3xl sm:text-5xl font-black text-white uppercase">
+                        Géolocalisation &amp; Itinéraires
+                    </h2>
+                    <p class="text-gray-300 text-sm sm:text-base">
+                        Sélectionnez un garage ou une boutique ci-dessous pour l'afficher sur la carte et calculer le trajet directement depuis votre position.
+                    </p>
+                </div>
+
+                <!-- Map Container -->
+                <div class="grid lg:grid-cols-12 gap-8 items-start">
+                    <div class="lg:col-span-8 glass-dark p-4 rounded-3xl border border-brandOrange/40">
+                        <div id="map"></div>
+                    </div>
+
+                    <!-- Target Location Info & Itinerary Launcher -->
+                    <div class="lg:col-span-4 glass-dark p-6 sm:p-8 rounded-3xl space-y-6 flex flex-col justify-between min-h-[420px]">
+                        <div>
+                            <div class="flex items-center gap-2 text-brandOrange font-bold text-xs uppercase tracking-wider mb-2">
+                                <i class="fa-solid fa-compass"></i> Destination Sélectionnée
+                            </div>
+                            <h3 id="targetName" class="text-2xl font-black text-white">Garage Auto Excellence</h3>
+                            <p id="targetQuartier" class="text-sm text-brandOrange font-bold mt-1">Quartier: Tokoin Doumasséssé</p>
+                            <p id="targetManager" class="text-xs text-gray-300 mt-2"><i class="fa-solid fa-user-gear mr-1 text-brandOrange"></i> Responsable: M. Koffi Mensah</p>
+                            <p id="targetPhone" class="text-xs text-gray-300 mt-1"><i class="fa-solid fa-phone mr-1 text-brandOrange"></i> Contact: +228 90 11 22 33</p>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-brandBlack border border-brandOrange/30 space-y-2">
+                            <span class="text-xs text-gray-400 font-bold uppercase block">Type d'Établissement</span>
+                            <p id="targetType" class="text-sm font-extrabold text-white">Garage Automobiles 4 Roues</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <button onclick="launchGPSItinerary()" class="w-full py-4 rounded-xl bg-brandOrange text-black font-black hover:bg-white transition duration-300 flex items-center justify-center gap-2 shadow-lg shadow-brandOrange/20">
+                                <i class="fa-solid fa-route"></i> Lancer l'Itinéraire GPS
+                            </button>
+                            <button onclick="contactManagerWhatsApp()" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-2">
+                                <i class="fa-brands fa-whatsapp text-lg"></i> Contacter par WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="gestion-stock" class="checkerboard-orange py-20 px-4 sm:px-6 lg:px-8 border-b border-black/40">
+            <div class="max-w-6xl mx-auto space-y-12">
+                <div class="text-center space-y-4 max-w-3xl mx-auto bg-black/80 p-8 rounded-3xl border border-white/20 shadow-2xl">
+                    <span class="text-brandOrange font-black text-xs uppercase tracking-widest">Espace Propriétaire / Boutique</span>
+                    <h2 class="font-heading text-3xl sm:text-5xl font-black text-white uppercase">
+                        Mise à jour du Stock de Pièces
+                    </h2>
+                    <p class="text-gray-300 text-xs sm:text-sm">
+                        Vous gérez une boutique ou un garage ? Ajoutez et mettez à jour instantanément les articles et pièces que vous avez à disposition.
+                    </p>
+                </div>
+
+                <div class="grid lg:grid-cols-12 gap-8">
+                    <!-- Form to add stock item -->
+                    <div class="lg:col-span-5 glass-orange p-6 sm:p-8 rounded-3xl space-y-6">
+                        <h3 class="font-extrabold text-xl text-white border-b border-brandOrange/40 pb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-plus-circle text-brandOrange"></i> Ajouter une pièce au Stock
+                        </h3>
+
+                        <form id="addStockForm" onsubmit="handleAddStock(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase mb-1">Sélectionner la Boutique</label>
+                                <select id="stockStoreSelect" class="w-full px-4 py-3 rounded-xl glass-input-dark text-xs bg-brandBlack" required>
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase mb-1">Nom de la Pièce / Article</label>
+                                <input type="text" id="partName" placeholder="Ex: Plaquettes de frein Toyota Hilux" required class="w-full px-4 py-3 rounded-xl glass-input-dark text-xs">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-300 uppercase mb-1">Catégorie</label>
+                                    <select id="partCategory" class="w-full px-4 py-3 rounded-xl glass-input-dark text-xs bg-brandBlack">
+                                        <option value="Moteur">Moteur</option>
+                                        <option value="Freinage">Freinage</option>
+                                        <option value="Transmission">Transmission</option>
+                                        <option value="Électricité">Électricité</option>
+                                        <option value="Pneumatique">Pneumatique</option>
+                                        <option value="Carrosserie">Carrosserie</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-300 uppercase mb-1">Prix Estimé (FCFA)</label>
+                                    <input type="number" id="partPrice" placeholder="Ex: 25000" required class="w-full px-4 py-3 rounded-xl glass-input-dark text-xs">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-gray-300 uppercase mb-1">Quantité en Stock</label>
+                                <input type="number" id="partQty" min="1" value="1" required class="w-full px-4 py-3 rounded-xl glass-input-dark text-xs">
+                            </div>
+
+                            <button type="submit" class="w-full py-4 rounded-xl bg-brandOrange text-black font-black hover:bg-white transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> Publier l'Article en Direct
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Live Stock Table -->
+                    <div class="lg:col-span-7 glass-orange p-6 sm:p-8 rounded-3xl space-y-6 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-brandOrange/40 pb-3">
+                                <h3 class="font-extrabold text-xl text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-boxes-stacked text-brandOrange"></i> Stock Disponible en Direct
+                                </h3>
+                                <span class="text-xs px-3 py-1 rounded-full bg-brandOrange text-black font-black" id="totalItemsBadge">0 Articles</span>
+                            </div>
+
+                            <div class="mt-4 overflow-x-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead>
+                                        <tr class="border-b border-gray-700 text-brandOrange font-bold uppercase">
+                                            <th class="py-3 px-2">Article</th>
+                                            <th class="py-3 px-2">Boutique</th>
+                                            <th class="py-3 px-2">Prix</th>
+                                            <th class="py-3 px-2">Qté</th>
+                                            <th class="py-3 px-2 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="stockTableBody" class="divide-y divide-gray-800 text-gray-300">
+                                        <!-- Rendered dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-brandBlack border border-brandOrange/30 text-xs text-gray-400">
+                            <i class="fa-solid fa-circle-info text-brandOrange mr-1"></i> Les pièces ajoutées apparaissent instantanément dans les fiches des magasins.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ai-assistant" class="checkerboard-dark py-20 px-4 sm:px-6 lg:px-8 border-b border-brandOrange/30">
+            <div class="max-w-7xl mx-auto space-y-12">
+                <div class="text-center space-y-4 max-w-3xl mx-auto">
+                    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brandOrange/20 text-brandOrange border border-brandOrange/40 text-xs font-black uppercase tracking-wider">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Propulsé par Gemini AI
+                    </div>
+                    <h2 class="font-heading text-3xl sm:text-5xl font-black text-white uppercase">
+                        Assistant IA Miabe Auto
+                    </h2>
+                    <p class="text-gray-300 text-sm sm:text-base">
+                        Décrivez le problème mécanique ou le bruit de votre véhicule : notre IA identifie la panne probable et vous recommande la pièce à commander.
+                    </p>
+                </div>
+
+                <div class="grid lg:grid-cols-12 gap-8">
+                    <!-- AI Chat Interface -->
+                    <div class="lg:col-span-7 glass-dark rounded-3xl p-6 sm:p-8 flex flex-col justify-between space-y-6">
+                        <div class="flex items-center justify-between border-b border-brandOrange/30 pb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-brandOrange text-black font-black flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-robot"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-extrabold text-lg text-white">Conseiller Mécanique IA</h3>
+                                    <p class="text-xs text-brandOrange">Disponible 24h/24 &amp; 7j/7</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-dark rounded-2xl p-4 h-72 overflow-y-auto space-y-3 text-xs" id="chatContainer">
+                            <div class="bg-brandOrange/20 border border-brandOrange/40 rounded-xl p-3 text-white">
+                                <strong>MIABE AUTO IA:</strong> Bonjour ! Je suis votre expert mécano virtuel. Décrivez-moi le symptôme de votre voiture ou de votre moto (ex: bruit de grincement au freinage, fumée noire, démarrage difficile) et je vous orienterai !
+                            </div>
+                        </div>
+
+                        <form onsubmit="handleAIChatSubmit(event)" class="flex gap-2">
+                            <input type="text" id="chatInput" placeholder="Ex: Ma moto siffle quand j'accélère..." required class="flex-1 px-4 py-3 rounded-xl glass-input-dark text-xs">
+                            <button type="submit" id="chatBtn" class="px-5 py-3 rounded-xl bg-brandOrange text-black font-black text-xs hover:bg-white transition flex items-center justify-center">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Recommended Solutions & Quick Guides -->
+                    <div class="lg:col-span-5 glass-dark rounded-3xl p-6 sm:p-8 space-y-6 flex flex-col justify-between">
+                        <div class="space-y-4">
+                            <h3 class="font-extrabold text-xl text-white flex items-center gap-2">
+                                <i class="fa-solid fa-lightbulb text-brandOrange"></i> Pannes Fréquentes Prises en Charge
+                            </h3>
+
+                            <div class="space-y-3 text-xs">
+                                <div class="p-3 rounded-xl bg-brandBlack border border-brandOrange/20">
+                                    <strong class="text-brandOrange block">Problème d'Allumage / Batterie</strong>
+                                    <p class="text-gray-400 mt-0.5">Test alternateur, bougies et remplacement batterie 12V.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-brandBlack border border-brandOrange/20">
+                                    <strong class="text-brandOrange block">Surchauffe Moteur / Liquide</strong>
+                                    <p class="text-gray-400 mt-0.5">Inspection radiateur, pompe à eau et ventilateur.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-brandBlack border border-brandOrange/20">
+                                    <strong class="text-brandOrange block">Kit Chaîne / Courroie de Moto</strong>
+                                    <p class="text-gray-400 mt-0.5">Tension de chaîne, pignons et courroies de variateur scooter.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <a href="#garages-auto" class="w-full py-3.5 rounded-xl bg-brandDarkGray border border-brandOrange text-brandOrange hover:bg-brandOrange hover:text-black font-bold text-xs transition text-center block">
+                            Parcourir la liste des garages spécialisés
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="contact" class="checkerboard-orange py-20 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-4xl mx-auto">
+                <div class="glass-orange rounded-3xl p-8 sm:p-12 relative border border-white/30">
+                    <div class="text-center space-y-3 mb-10">
+                        <h2 class="font-heading text-3xl sm:text-4xl font-black text-white uppercase">Inscrire un Garage ou une Boutique</h2>
+                        <p class="text-gray-300 text-sm">Rejoignez le réseau national Miabe Auto et augmentez votre visibilité.</p>
+                    </div>
+
+                    <form id="registrationForm" class="space-y-6" onsubmit="handleRegistrationSubmit(event)">
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase text-gray-300">Nom de l'Établissement</label>
+                                <input type="text" required placeholder="Ex: Garage Méca-Plus" class="w-full px-4 py-3 rounded-xl glass-input-dark">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase text-gray-300">Type d'Activité</label>
+                                <select class="w-full px-4 py-3 rounded-xl glass-input-dark bg-brandBlack">
+                                    <option value="Garage Auto (4 Roues)">Garage Auto (4 Roues)</option>
+                                    <option value="Garage Moto (2 Roues)">Garage Moto (2 Roues)</option>
+                                    <option value="Maison de Vente de Pièces">Maison de Vente de Pièces</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase text-gray-300">Nom du Responsable</label>
+                                <input type="text" required placeholder="M. / Mme..." class="w-full px-4 py-3 rounded-xl glass-input-dark">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase text-gray-300">Contact Téléphonique / WhatsApp</label>
+                                <input type="tel" required placeholder="+228 90 00 00 00" class="w-full px-4 py-3 rounded-xl glass-input-dark">
+                            </div>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase text-gray-300">Quartier / Emplacement</label>
+                                <input type="text" required placeholder="Ex: Tokoin, Bè, Adidogomé..." class="w-full px-4 py-3 rounded-xl glass-input-dark">
+                            </div>
+                            <div class="space-y-2">
+                                <label class="block text-xs font-bold uppercase text-gray-300">Ville</label>
+                                <input type="text" required placeholder="Ex: Lomé" class="w-full px-4 py-3 rounded-xl glass-input-dark">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full py-4 rounded-xl bg-brandOrange text-black font-black text-lg hover:bg-white transition duration-300">
+                            <i class="fa-solid fa-paper-plane mr-2"></i> Soumettre la Demande d'Inscription
+                        </button>
+                    </form>
+
+                    <div id="registrationSuccessAlert" class="hidden mt-6 p-4 rounded-xl bg-emerald-500/30 border border-emerald-400 text-emerald-200 text-center font-bold text-sm">
+                        <i class="fa-solid fa-circle-check mr-2"></i> Mode démonstration : aucune demande n’est envoyée à un serveur. Le formulaire sera connecté à la base de données dans la prochaine étape.
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-brandOrange/30 bg-black py-10 px-4 sm:px-6 lg:px-8 text-gray-400 text-xs">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
+            <div>
+                <span class="font-heading font-black text-2xl tracking-wider text-white">
+                    Miabe <span class="text-brandOrange">Auto</span>
+                </span>
+                <p class="text-brandOrange font-semibold mt-1">« Miabe Auto, votre véhicule entre de bonnes mains. »</p>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-6 font-semibold">
+                <a href="#garages-auto" class="hover:text-brandOrange">Auto 4 Roues</a>
+                <a href="#garages-motos" class="hover:text-brandOrange">Motos 2 Roues</a>
+                <a href="#boutiques-pieces" class="hover:text-brandOrange">Pièces Détachées</a>
+                <a href="#geolocalisation" class="hover:text-brandOrange">GPS</a>
+            </div>
+
+            <div>
+                &copy; <span id="year"></span> Miabe Auto. Tous droits réservés.
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Datasets for Garages and Stores (With Lat/Lng for Leaflet GPS)
+        const establishments = [
+            // Garages 4 Roues (Auto)
+            {
+                id: 'auto-1',
+                type: 'auto',
+                name: 'Garage Mécanique Excellence Auto',
+                manager: 'M. Koffi Mensah',
+                phone: '+228 90 11 22 33',
+                quartier: 'Tokoin Doumasséssé',
+                city: 'Lomé',
+                lat: 6.1372,
+                lng: 1.2125,
+                specialties: 'Diagnostic Électronique, Moteur Injection, Freinage',
+                rating: 4.9
+            },
+            {
+                id: 'auto-2',
+                type: 'auto',
+                name: 'Auto-Tech Pro Togo',
+                manager: 'M. Yao Mawuli',
+                phone: '+228 91 44 55 66',
+                quartier: 'Adidogomé Ave Maria',
+                city: 'Lomé',
+                lat: 6.1750,
+                lng: 1.1820,
+                specialties: 'Tôlerie, Peinture Four, Climatisation Auto',
+                rating: 4.8
+            },
+            {
+                id: 'auto-3',
+                type: 'auto',
+                name: 'Atelier Central 4x4 & SUV',
+                manager: 'M. Stéphane Agbovi',
+                phone: '+228 92 77 88 99',
+                quartier: 'Bè KPOTA',
+                city: 'Lomé',
+                lat: 6.1280,
+                lng: 1.2450,
+                specialties: 'Suspension, Vidange Rapide, Boîte Automatique',
+                rating: 4.7
+            },
+
+            // Garages 2 Roues (Motos)
+            {
+                id: 'moto-1',
+                type: 'moto',
+                name: 'Garage Express Motos & Scooters',
+                manager: 'M. Kodjo Lawson',
+                phone: '+228 93 22 33 44',
+                quartier: 'Hanoukopé',
+                city: 'Lomé',
+                lat: 6.1310,
+                lng: 1.2210,
+                specialties: 'Réparation Moteur 2T/4T, Carburateur, Électricité Moto',
+                rating: 4.9
+            },
+            {
+                id: 'moto-2',
+                type: 'moto',
+                name: 'Maison du Tricycle & Gros Cubes',
+                manager: 'M. Folly Dossou',
+                phone: '+228 98 55 66 77',
+                quartier: 'Agoè Assiyéyé',
+                city: 'Lomé',
+                lat: 6.2010,
+                lng: 1.2150,
+                specialties: 'Motos de Course, Tricycles de Transport, Kit Chaîne',
+                rating: 4.8
+            },
+
+            // Boutiques de Pièces Détachées
+            {
+                id: 'piece-1',
+                type: 'pieces',
+                name: 'Comptoir Général des Pièces Auto-Moto',
+                manager: 'Mme Essenam Amégée',
+                phone: '+228 90 99 88 77',
+                quartier: 'Cité OUA',
+                city: 'Lomé',
+                lat: 6.1600,
+                lng: 1.2180,
+                specialties: 'Filtres, Bougies, Amortisseurs, Pneus d\'origine',
+                rating: 4.9,
+                inventory: [
+                    { name: 'Plaquettes de frein avant Toyota', category: 'Freinage', price: 18000, qty: 5 },
+                    { name: 'Filtre à Huile Hilux / Prado', category: 'Moteur', price: 6000, qty: 12 },
+                    { name: 'Batterie 12V 70Ah', category: 'Électricité', price: 45000, qty: 8 }
+                ]
+            },
+            {
+                id: 'piece-2',
+                type: 'pieces',
+                name: 'Maison de la Pièce Moto & Scooter',
+                manager: 'M. Sylvain Kossi',
+                phone: '+228 91 12 34 56',
+                quartier: 'Kodjoviakopé',
+                city: 'Lomé',
+                lat: 6.1190,
+                lng: 1.2080,
+                specialties: 'Pneus Moto, Pignons, Chaînes, Piston & Cylindre',
+                rating: 4.8,
+                inventory: [
+                    { name: 'Kit Chaîne Renforcé 428', category: 'Transmission', price: 15000, qty: 10 },
+                    { name: 'Pneu Moto 110/80-17', category: 'Pneumatique', price: 22000, qty: 6 }
+                ]
+            }
+        ];
+
+        let selectedTarget = establishments[0];
+        let map, mapMarker, userMarker;
+        let nearbyUserPosition = null;
+        const DEMO_STORAGE_KEY = 'miabeAutoDemoInventoryV1';
+
+        // Le prototype conserve uniquement le stock de démonstration dans ce navigateur.
+        // Une base de données serveur sera nécessaire pour une vraie application multi-utilisateur.
+        function loadDemoInventory() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(DEMO_STORAGE_KEY) || '{}');
+                establishments.forEach(item => {
+                    if (item.type === 'pieces' && Array.isArray(saved[item.id])) item.inventory = saved[item.id];
+                });
+            } catch (error) {
+                console.warn('Stock de démonstration non chargé.', error);
+            }
+        }
+
+        function saveDemoInventory() {
+            try {
+                const saved = {};
+                establishments.filter(item => item.type === 'pieces').forEach(item => {
+                    saved[item.id] = item.inventory || [];
+                });
+                localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(saved));
+            } catch (error) {
+                alert("Impossible d'enregistrer les données dans ce navigateur.");
+            }
+        }
+
+        function distanceKm(lat1, lon1, lat2, lon2) {
+            const toRad = value => value * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+            return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function findNearbyEstablishments() {
+            const status = document.getElementById('searchStatus');
+            if (!navigator.geolocation) {
+                status.textContent = "La géolocalisation n'est pas prise en charge par ce navigateur. Utilisez le filtre par quartier.";
+                return;
+            }
+            status.textContent = "Recherche de votre position…";
+            navigator.geolocation.getCurrentPosition(position => {
+                nearbyUserPosition = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                if (map) {
+                    map.setView([nearbyUserPosition.lat, nearbyUserPosition.lng], 13);
+                    if (userMarker) userMarker.setLatLng([nearbyUserPosition.lat, nearbyUserPosition.lng]);
+                    else userMarker = L.marker([nearbyUserPosition.lat, nearbyUserPosition.lng])
+                        .addTo(map).bindPopup('Votre position');
+                }
+                filterEstablishments();
+            }, error => {
+                nearbyUserPosition = null;
+                const messages = {
+                    1: "Autorisation de géolocalisation refusée. Vous pouvez rechercher par quartier.",
+                    2: "Position indisponible. Réessayez ou recherchez par quartier.",
+                    3: "La recherche de position a expiré. Réessayez."
+                };
+                status.textContent = messages[error.code] || "Impossible d'obtenir votre position. Recherchez par quartier.";
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+        }
+
+        // Render Establishments
+        function renderAllGrids() {
+            const autoGrid = document.getElementById('gridAuto');
+            const motoGrid = document.getElementById('gridMoto');
+            const piecesGrid = document.getElementById('gridPieces');
+
+            autoGrid.innerHTML = '';
+            motoGrid.innerHTML = '';
+            piecesGrid.innerHTML = '';
+
+            establishments.forEach(item => {
+                const cardHtml = `
+                    <div data-establishment-id="${item.id}" class="glass-dark glass-card-hover rounded-3xl p-6 flex flex-col justify-between space-y-4 border border-brandOrange/30">
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-brandOrange text-black">
+                                    <i class="fa-solid ${item.type === 'auto' ? 'fa-car' : item.type === 'moto' ? 'fa-motorcycle' : 'fa-boxes-packing'} mr-1"></i> ${item.type === 'auto' ? 'Auto 4 Roues' : item.type === 'moto' ? 'Moto 2 Roues' : 'Pièces Détachées'}
+                                </span>
+                                <span class="text-xs text-amber-400 font-bold"><i class="fa-solid fa-star"></i> ${item.rating}</span>
+                            </div>
+
+                            <h3 class="font-black text-xl text-white">${item.name}</h3>
+
+                            <div class="space-y-1.5 text-xs text-gray-300">
+                                <p><strong class="text-brandOrange">Responsable:</strong> ${item.manager}</p>
+                                <p><strong class="text-brandOrange">Contact:</strong> ${item.phone}</p>
+                                <p><strong class="text-brandOrange">Quartier:</strong> ${item.quartier} (${item.city})</p>
+                                <p class="text-gray-400 text-[11px] mt-2 italic"><i class="fa-solid fa-wrench mr-1 text-brandOrange"></i> ${item.specialties}</p>
+                            </div>
+
+                            ${item.inventory ? `
+                                <div class="mt-3 p-3 rounded-xl bg-brandBlack border border-brandOrange/20 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase text-brandOrange block"><i class="fa-solid fa-boxes-stacked mr-1"></i> Stock Disponible en Direct</span>
+                                    <ul class="text-[11px] text-gray-300 divide-y divide-gray-800">
+                                        ${item.inventory.map(inv => `
+                                            <li class="py-1 flex justify-between">
+                                                <span>${inv.name}</span>
+                                                <strong class="text-amber-400">${inv.price.toLocaleString()} FCFA</strong>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="pt-2 flex gap-2">
+                            <button onclick="selectAndShowMap('${item.id}')" class="flex-1 py-3 rounded-xl bg-brandOrange text-black font-black text-xs hover:bg-white transition flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-map-pin"></i> Géolocaliser
+                            </button>
+                            <a href="tel:${item.phone.replace(/\s+/g, '')}" class="px-4 py-3 rounded-xl bg-brandDarkGray border border-brandOrange/40 text-white hover:text-brandOrange text-xs font-bold transition flex items-center justify-center">
+                                <i class="fa-solid fa-phone"></i>
+                            </a>
+                        </div>
+                    </div>
+                `;
+
+                if (item.type === 'auto') autoGrid.innerHTML += cardHtml;
+                else if (item.type === 'moto') motoGrid.innerHTML += cardHtml;
+                else if (item.type === 'pieces') piecesGrid.innerHTML += cardHtml;
+            });
+
+            populateStoreSelect();
+            renderStockTable();
+        }
+
+        // Initialize Map
+        function initMap() {
+            map = L.map('map').setView([selectedTarget.lat, selectedTarget.lng], 14);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            mapMarker = L.marker([selectedTarget.lat, selectedTarget.lng]).addTo(map)
+                .bindPopup(`<b>${selectedTarget.name}</b><br>${selectedTarget.quartier}`)
+                .openPopup();
+        }
+
+        function selectAndShowMap(id) {
+            const found = establishments.find(e => e.id === id);
+            if (!found) return;
+
+            selectedTarget = found;
+            document.getElementById('targetName').textContent = selectedTarget.name;
+            document.getElementById('targetQuartier').textContent = `Quartier: ${selectedTarget.quartier}`;
+            document.getElementById('targetManager').innerHTML = `<i class="fa-solid fa-user-gear mr-1 text-brandOrange"></i> Responsable: ${selectedTarget.manager}`;
+            document.getElementById('targetPhone').innerHTML = `<i class="fa-solid fa-phone mr-1 text-brandOrange"></i> Contact: ${selectedTarget.phone}`;
+            document.getElementById('targetType').textContent = selectedTarget.type === 'auto' ? 'Garage Automobiles (4 Roues)' : selectedTarget.type === 'moto' ? 'Garage Motos (2 Roues)' : 'Maison de Vente de Pièces';
+
+            if (map && mapMarker) {
+                map.setView([selectedTarget.lat, selectedTarget.lng], 15);
+                mapMarker.setLatLng([selectedTarget.lat, selectedTarget.lng])
+                    .bindPopup(`<b>${selectedTarget.name}</b><br>${selectedTarget.quartier}`)
+                    .openPopup();
+            }
+
+            // Smooth scroll to map
+            document.getElementById('geolocalisation').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function launchGPSItinerary() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userLat = position.coords.latitude;
+                        const userLng = position.coords.longitude;
+                        
+                        // Google Maps direction URL
+                        const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${userLat},${userLng}&destination=${selectedTarget.lat},${selectedTarget.lng}`;
+                        window.open(mapsUrl, '_blank');
+                    },
+                    () => {
+                        // Fallback direct destination
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${selectedTarget.lat},${selectedTarget.lng}`;
+                        window.open(mapsUrl, '_blank');
+                    }
+                );
+            } else {
+                alert("La géolocalisation n'est pas supportée par votre navigateur.");
+            }
+        }
+
+        function contactManagerWhatsApp() {
+            const cleanPhone = selectedTarget.phone.replace(/[^0-9]/g, '');
+            const msg = encodeURIComponent(`Bonjour ${selectedTarget.manager}, je vous contacte depuis la plateforme Miabe Auto concernant ${selectedTarget.name}.`);
+            window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+        }
+
+        // Filter establishments
+        function filterEstablishments() {
+            const type = document.getElementById('searchType').value;
+            const query = document.getElementById('searchQuartier').value.toLowerCase().trim();
+            const status = document.getElementById('searchStatus');
+            let visibleCount = 0;
+            let nearest = null;
+
+            establishments.forEach(item => {
+                const searchableText = [
+                    item.name, item.quartier, item.city, item.manager, item.specialties,
+                    ...(item.inventory || []).map(part => `${part.name} ${part.category}`)
+                ].join(' ').toLowerCase();
+                const matchesType = type === 'all' || item.type === type;
+                const matchesQuery = !query || searchableText.includes(query);
+                const distance = nearbyUserPosition
+                    ? distanceKm(nearbyUserPosition.lat, nearbyUserPosition.lng, item.lat, item.lng)
+                    : null;
+                const matchesRadius = distance === null || distance <= 5;
+                const visible = matchesType && matchesQuery && matchesRadius;
+                const card = document.querySelector(`[data-establishment-id="${item.id}"]`);
+                if (card) card.classList.toggle('hidden', !visible);
+                if (visible) {
+                    visibleCount++;
+                    if (distance !== null && (!nearest || distance < nearest.distance)) nearest = { item, distance };
+                }
+            });
+
+            if (nearbyUserPosition) {
+                status.textContent = `${visibleCount} établissement(s) trouvé(s) dans un rayon de 5 km${query ? ' correspondant à votre recherche' : ''}. Les coordonnées de cette démo doivent être vérifiées.`;
+            } else {
+                status.textContent = `${visibleCount} établissement(s) correspondent à votre recherche.`;
+            }
+
+            const sectionId = type === 'auto' ? 'garages-auto' : type === 'moto' ? 'garages-motos' :
+                type === 'pieces' ? 'boutiques-pieces' : (nearest ? 'geolocalisation' : '');
+            if (visibleCount === 0) {
+                status.textContent = "Aucun résultat. Essayez un autre type ou quartier, ou désactivez la recherche autour de vous.";
+            } else if (nearest) {
+                selectAndShowMap(nearest.item.id);
+            } else if (sectionId) {
+                document.getElementById(sectionId).scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        // Store inventory management
+        function populateStoreSelect() {
+            const select = document.getElementById('stockStoreSelect');
+            select.innerHTML = '';
+            establishments.filter(e => e.type === 'pieces').forEach(store => {
+                select.innerHTML += `<option value="${store.id}">${store.name} (${store.quartier})</option>`;
+            });
+        }
+
+        function renderStockTable() {
+            const tbody = document.getElementById('stockTableBody');
+            tbody.innerHTML = '';
+            let totalCount = 0;
+
+            establishments.filter(e => e.type === 'pieces').forEach(store => {
+                if (store.inventory) {
+                    store.inventory.forEach((item, index) => {
+                        totalCount += item.qty;
+                        tbody.innerHTML += `
+                            <tr class="hover:bg-brandBlack/40 transition">
+                                <td class="py-3 px-2 font-bold text-white">${item.name}</td>
+                                <td class="py-3 px-2 text-brandOrange">${store.name}</td>
+                                <td class="py-3 px-2 font-extrabold text-amber-300">${item.price.toLocaleString()} F</td>
+                                <td class="py-3 px-2 font-bold">${item.qty}</td>
+                                <td class="py-3 px-2 text-right">
+                                    <button onclick="removeStockItem('${store.id}', ${index})" class="text-red-400 hover:text-red-200">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+            });
+
+            document.getElementById('totalItemsBadge').textContent = `${totalCount} unités en stock`;
+        }
+
+        function handleAddStock(e) {
+            e.preventDefault();
+            const storeId = document.getElementById('stockStoreSelect').value;
+            const name = document.getElementById('partName').value;
+            const category = document.getElementById('partCategory').value;
+            const price = parseInt(document.getElementById('partPrice').value);
+            const qty = parseInt(document.getElementById('partQty').value);
+
+            const store = establishments.find(e => e.id === storeId);
+            if (store) {
+                if (!store.inventory) store.inventory = [];
+                if (!name.trim() || !Number.isFinite(price) || price < 0 || !Number.isInteger(qty) || qty < 1) {
+                    alert("Vérifiez le nom, le prix et la quantité de la pièce.");
+                    return;
+                }
+                store.inventory.push({ name: name.trim(), category, price, qty });
+                saveDemoInventory();
+                renderAllGrids();
+                document.getElementById('addStockForm').reset();
+                alert("Pièce ajoutée avec succès au stock de la boutique !");
+            }
+        }
+
+        function removeStockItem(storeId, itemIndex) {
+            const store = establishments.find(e => e.id === storeId);
+            if (store && store.inventory) {
+                store.inventory.splice(itemIndex, 1);
+                saveDemoInventory();
+                renderAllGrids();
+            }
+        }
+
+        // Gemini AI Call Function
+        async function callGeminiAPI(prompt, systemInstruction = "") {
+            // Sécurité : ne jamais placer une clé API secrète dans le code du navigateur.
+            // Connecter cette fonction à une route serveur sécurisée avant d'activer l'IA.
+            throw new Error("Assistant IA non configuré : un serveur sécurisé et une clé API côté serveur sont nécessaires.");
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }]
+            };
+
+            if (systemInstruction) {
+                payload.systemInstruction = {
+                    parts: [{ text: systemInstruction }]
+                };
+            }
+
+            let retries = 3;
+            let delay = 1000;
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "Désolé, impossible de diagnostiquer cette panne.";
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        async function handleAIChatSubmit(e) {
+            e.preventDefault();
+            const inputEl = document.getElementById('chatInput');
+            const btnEl = document.getElementById('chatBtn');
+            const container = document.getElementById('chatContainer');
+            const userText = inputEl.value.trim();
+
+            if (!userText) return;
+
+            container.innerHTML += `
+                <div class="bg-brandDarkGray border border-brandOrange/30 rounded-xl p-3 text-white text-right">
+                    <strong>Vous:</strong> ${escapeHtml(userText)}
+                </div>
+            `;
+            inputEl.value = '';
+            container.scrollTop = container.scrollHeight;
+
+            btnEl.disabled = true;
+            btnEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+
+            const systemPrompt = "Vous êtes le mécanicien virtuel expert de Miabe Auto. Slogan: 'Miabe Auto & Co, toujours là lorsque vous en avez besoin.' Donnez une explication très claire et concise de la panne probable (auto ou moto) et conseillez les pièces à remplacer ou vérifier. Réponse en 3 phrases maximum.";
+
+            try {
+                const reply = await callGeminiAPI(userText, systemPrompt);
+                container.innerHTML += `
+                    <div class="bg-brandOrange/20 border border-brandOrange/40 rounded-xl p-3 text-white">
+                        <strong>MIABE AUTO IA:</strong> ${escapeHtml(reply)}
+                    </div>
+                `;
+            } catch (err) {
+                container.innerHTML += `
+                    <div class="bg-red-500/20 border border-red-400/30 rounded-xl p-3 text-red-200">
+                        <strong>Mode démonstration :</strong> l'assistant IA sera activé après configuration d'un serveur sécurisé.
+                    </div>
+                `;
+            } finally {
+                btnEl.disabled = false;
+                btnEl.innerHTML = `<i class="fa-solid fa-paper-plane"></i>`;
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        function handleRegistrationSubmit(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('registrationSuccessAlert');
+            alertBox.classList.remove('hidden');
+            // Le formulaire n'est pas encore relié à un serveur : ne pas prétendre que la demande est envoyée.
+            setTimeout(() => alertBox.classList.add('hidden'), 8000);
+        }
+
+        // Mobile Menu Logic
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+        mobileMenuBtn.addEventListener('click', () => mobileMenu.classList.toggle('hidden'));
+        document.querySelectorAll('.mobile-link').forEach(link => {
+            link.addEventListener('click', () => mobileMenu.classList.add('hidden'));
+        });
+
+        // Initialize on load
+        window.onload = function () {
+            loadDemoInventory();
+            renderAllGrids();
+            initMap();
+            document.getElementById('searchQuartier').addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    filterEstablishments();
+                }
+            });
+        };
+    </script>
+</body>
+</html>

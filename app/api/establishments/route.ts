@@ -1,0 +1,12 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { sql } from '@/lib/db';
+export const dynamic='force-dynamic';
+export async function GET(req:NextRequest){
+ const p=req.nextUrl.searchParams,q=(p.get('q')||'').trim().slice(0,100),type=p.get('type'),category=(p.get('category')||'').slice(0,80),lat=Number(p.get('lat')),lng=Number(p.get('lng')),radius=Math.min(Math.max(Number(p.get('radius')||5),1),50);
+ const hasGeo=Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
+ try {
+  const rows=hasGeo?await sql`SELECT e.id,e.type,e.name,e.phone,e.whatsapp,e.address,e.neighborhood,e.city,e.description,e.vehicle_types,e.specialties,e.latitude,e.longitude,e.image_url,e.updated_at,ST_Distance(e.location,ST_SetSRID(ST_MakePoint(${lng},${lat}),4326)::geography)/1000 AS distance_km FROM establishments e WHERE e.status='approved' AND (${type||null}::text IS NULL OR e.type::text=${type||null}) AND (${q}='' OR to_tsvector('simple',coalesce(e.name,'')||' '||coalesce(e.address,'')||' '||coalesce(e.neighborhood,'')||' '||coalesce(e.city,'')||' '||coalesce(e.description,'')) @@ plainto_tsquery('simple',${q})) AND (${category}='' OR array_to_string(e.specialties,' ') ILIKE '%'||${category}||'%' OR EXISTS(SELECT 1 FROM products p WHERE p.establishment_id=e.id AND p.is_active=true AND (p.name ILIKE '%'||${category}||'%' OR p.category ILIKE '%'||${category}||'%'))) AND e.location IS NOT NULL AND ST_DWithin(e.location,ST_SetSRID(ST_MakePoint(${lng},${lat}),4326)::geography,${radius*1000}) ORDER BY distance_km LIMIT 250`:
+  await sql`SELECT e.id,e.type,e.name,e.phone,e.whatsapp,e.address,e.neighborhood,e.city,e.description,e.vehicle_types,e.specialties,e.latitude,e.longitude,e.image_url,e.updated_at,NULL::float AS distance_km FROM establishments e WHERE e.status='approved' AND (${type||null}::text IS NULL OR e.type::text=${type||null}) AND (${q}='' OR to_tsvector('simple',coalesce(e.name,'')||' '||coalesce(e.address,'')||' '||coalesce(e.neighborhood,'')||' '||coalesce(e.city,'')||' '||coalesce(e.description,'')) @@ plainto_tsquery('simple',${q})) AND (${category}='' OR array_to_string(e.specialties,' ') ILIKE '%'||${category}||'%' OR EXISTS(SELECT 1 FROM products p WHERE p.establishment_id=e.id AND p.is_active=true AND (p.name ILIKE '%'||${category}||'%' OR p.category ILIKE '%'||${category}||'%'))) ORDER BY e.name LIMIT 250`;
+  return NextResponse.json({items:rows});
+ } catch(e){console.error('directory query failed',e);return NextResponse.json({error:'Recherche momentanément indisponible.'},{status:503})}
+}
